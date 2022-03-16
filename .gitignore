@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 # Data files
-.data/physionet.org/
+data/physionet.org/
+data/*.csv
