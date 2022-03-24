@@ -19,7 +19,7 @@ class BinaryMLP:
         self.params = params
         self.fitted = False
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, random_state = 100, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, random_state = 42, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
@@ -42,7 +42,7 @@ class BinaryMLP:
         # Create and train model
         torch.manual_seed(random_state)
         model = self._gen_torch_model_(x_train.size(1), 1)
-        model = train_mlp(model, x_train, y_train, x_val,y_val, **args)
+        model = train_mlp(model, x_train, y_train, x_val, y_val, **args)
 
         # Update model
         self.torch_model = model.eval()

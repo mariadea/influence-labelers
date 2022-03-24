@@ -5,7 +5,8 @@ from torch.autograd import grad
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 from .loss import compute_loss
 
@@ -41,14 +42,18 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
     splitter = StratifiedKFold(split, shuffle = True, random_state = 42)
     folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(np.unique(h)), x.shape[0]))
     for i, (train_index, test_index) in enumerate(splitter.split(x, y)):
-        folds[train_index] = i
+        folds[test_index] = i
+        train_index, val_index = train_test_split(train_index, test_size = 0.15, shuffle = False)
 
         # Train model on the subset
         model_cv = model(**params)
-        model_cv.fit(x[train_index], y[train_index], h[train_index], **fit_params)
+        model_cv.fit(x[train_index], y[train_index], h[train_index], **fit_params, val = (x[val_index], y[val_index]))
 
-        # TODO: Calibrate NN
-        predictions[test_index] = model_cv.predict(x[test_index])[:, 0]
+        # Calibrate NN on validation set - Platt
+        pred_val = model_cv.predict(x[val_index])
+        pred_test = model_cv.predict(x[test_index])
+        calibrated = LogisticRegression().fit(pred_val, y[val_index])
+        predictions[test_index] = calibrated.predict_proba(pred_test)[:, 1]
 
         # Compute influence
         influence[:, test_index] = model_cv.influence(x[test_index])
