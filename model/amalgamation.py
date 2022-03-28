@@ -6,7 +6,7 @@ from torch.autograd import grad
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
 from .loss import compute_loss
 
@@ -39,9 +39,20 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
         folds, predictions, influence: Arrays of each point fold, predictions by the model and influence (dim len(x) * num experts)
     """
     x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
-    splitter = StratifiedKFold(split, shuffle = True, random_state = 42)
-    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(np.unique(h)), x.shape[0]))
-    for i, (train_index, test_index) in enumerate(splitter.split(x, y)):
+
+    # Shuffle data - Need separation from fold to ensure group
+    sort = np.arange(len(h))
+    x, y, h = x[sort], y[sort], h[sort]
+
+    # Create groups of observations to ensure one expert in each fold
+    g, unique_h = np.zeros_like(h), len(np.unique(h))
+    for expert in range(unique_h):
+        selection = h == expert
+        g[selection] = np.arange(np.sum(selection))
+
+    splitter = StratifiedGroupKFold(split, shuffle = True, random_state = 42)
+    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((unique_h, x.shape[0]))
+    for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
         folds[test_index] = i
         train_index, val_index = train_test_split(train_index, test_size = 0.15, shuffle = False)
 
