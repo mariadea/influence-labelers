@@ -42,6 +42,8 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
 
     # Shuffle data - Need separation from fold to ensure group
     sort = np.arange(len(h))
+    np.random.seed(42)
+    np.random.shuffle(sort)
     x, y, h = x[sort], y[sort], h[sort]
 
     # Create groups of observations to ensure one expert in each fold
@@ -50,7 +52,7 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
         selection = h == expert
         g[selection] = np.arange(np.sum(selection))
 
-    splitter = StratifiedGroupKFold(split, shuffle = True, random_state = 42)
+    splitter = StratifiedGroupKFold(split, shuffle = False)
     folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((unique_h, x.shape[0]))
     for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
         folds[test_index] = i
