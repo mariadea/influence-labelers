@@ -37,7 +37,7 @@ class BinaryMLP:
         processed_data = self._preprocess_train_(x, y, vsize, val, random_state)
         x_train, y_train, x_val, y_val = processed_data
         self.experts_training, self.x, self.y = h.values if isinstance(h, pd.Series) else h, self._preprocess_(x), self._preprocess_(y)
-        self.experts = np.unique(h)
+        self.experts = np.sort(np.unique(h))
 
         # Create and train model
         torch.manual_seed(random_state)
@@ -98,8 +98,8 @@ class BinaryMLP:
         hess = hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
         grad_p = grad_p[:, theta.squeeze() > 0]
 
-        for expert in self.experts:
-            influence_matrix[expert] = compute_influence(self.torch_model, grad_p, self.x[self.experts_training == expert], self.y[self.experts_training == expert], hess).detach()
+        for i, expert in enumerate(self.experts):
+            influence_matrix[i] = compute_influence(self.torch_model, grad_p, self.x[self.experts_training == expert], self.y[self.experts_training == expert], hess).detach()
 
         return influence_matrix
 
