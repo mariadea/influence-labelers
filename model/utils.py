@@ -43,8 +43,8 @@ def create_mlp(inputdim, layers, activation, dropout):
     return nn.Sequential(*modules)
 
 def train_mlp(model,
-            x_train, y_train, x_valid, y_valid,
-            n_iter = 1000, lr = 1e-3, weight_decay = 0.001, bs = 100):
+            x_train, y_train, x_valid, y_valid, l1_penalty = 0.001,
+            n_iter = 1, lr = 1e-3, weight_decay = 0.001, bs = 100):
 
     # Separate oprimizer as one might need more time to converge
     optimizer = torch.optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
@@ -66,7 +66,7 @@ def train_mlp(model,
                 continue
 
             optimizer.zero_grad()
-            loss = compute_loss(model, xb, yb) 
+            loss = compute_loss(model, xb, yb, l1_penalty) 
             loss.backward()
             optimizer.step()
 

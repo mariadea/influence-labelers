@@ -19,7 +19,7 @@ class BinaryMLP:
         self.params = params
         self.fitted = False
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, random_state = 42, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, random_state = 42, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
@@ -28,6 +28,7 @@ class BinaryMLP:
                 y (np.ndarray): A numpy array of the target label (1 dimensional for binary classification)
                 vsize (float, optional): Percentage of data used for validation. Ignored if val is provided. Defaults to 0.15.
                 val ((np.ndarray, np.ndarray), optional): Tuple of validation data and labels. Defaults to None.
+                l1_penalty (float, optional): L1 penalty used for the loss
                 random_state (int, optional): Random seed used for training and data split. Defaults to 100.
 
             Returns:
@@ -38,15 +39,24 @@ class BinaryMLP:
         x_train, y_train, x_val, y_val = processed_data
         self.experts_training, self.x, self.y = h.values if isinstance(h, pd.Series) else h, self._preprocess_(x), self._preprocess_(y)
         self.experts = np.sort(np.unique(h))
+        self.l1_penalty = l1_penalty # Save to ensure l1 penalyt consistent
 
         # Create and train model
         torch.manual_seed(random_state)
         model = self._gen_torch_model_(x_train.size(1), 1)
-        model = train_mlp(model, x_train, y_train, x_val, y_val, **args)
+        model = train_mlp(model, x_train, y_train, x_val, y_val, l1_penalty = l1_penalty, **args)
 
         # Update model
         self.torch_model = model.eval()
         self.fitted = True
+
+        # Estimate hessian of training loss
+        theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
+        try:
+            self.hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
+        except:
+            raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
+
         return self
 
     def predict(self, x):
@@ -67,7 +77,7 @@ class BinaryMLP:
                             "model using the `fit` method on some training data " +
                             "before calling `predict`.")
 
-    def influence(self, x, batch = 1000, hess = None):
+    def influence(self, x, batch = 1000):
         """
             Computes the influence of experts
 
@@ -77,29 +87,28 @@ class BinaryMLP:
             Returns:
                 np.narray: A 1d array of the influence of each expert
         """       
-        # Estimate hessian of training loss
-        theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
-        hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y), theta, create_graph = True).squeeze() if hess is None else hess
-        
         if batch is not None:
             # Batch computation to avoid too large matrix with hess shared
             batched_inf = []
             for i in range(len(x) // batch + 1):
                 if len(x[i * batch:(i+1) * batch]) > 0:
-                    batched_inf.append(self.influence(x[i * batch:(i+1) * batch], batch = None, hess = hess))
+                    batched_inf.append(self.influence(x[i * batch:(i+1) * batch], batch = None))
             return np.concatenate(batched_inf, axis = 1)
         
+        theta = self.torch_model.get_last_weights()
         x = self._preprocess_(x)
         influence_matrix = np.zeros((self.experts.shape[0], x.shape[0]))
 
         grad_p = jacobian(lambda weight: self.torch_model.replace_last_weights(weight)(x), theta, create_graph = True).squeeze()
 
         # Remove null theta from hessian
-        hess = hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
+        hess = self.hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
         grad_p = grad_p[:, theta.squeeze() > 0]
 
         for i, expert in enumerate(self.experts):
-            influence_matrix[i] = compute_influence(self.torch_model, grad_p, self.x[self.experts_training == expert], self.y[self.experts_training == expert], hess).detach()
+            influence_matrix[i] = compute_influence(self.torch_model, grad_p, 
+                self.x[self.experts_training == expert], self.y[self.experts_training == expert], 
+                hess, l1_penalty = self.l1_penalty).detach()
 
         return influence_matrix
 
