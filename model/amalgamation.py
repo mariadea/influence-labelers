@@ -41,13 +41,12 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
     x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
 
     # Shuffle data - Need separation from fold to ensure group
-    sort = np.arange(len(h))
-    np.random.seed(42)
-    np.random.shuffle(sort)
-    x, y, h = x[sort], y[sort], h[sort]
-    print(h)
+#     sort = np.arange(len(h))
+#     np.random.seed(42)
+#     np.random.shuffle(sort)
+#     x, y, h = x[sort], y[sort], h[sort]
+    
     # Create groups of observations to ensure one expert in each fold
-    #h_unique = np.unique(h)
     g, unique_h = np.zeros_like(h), np.unique(h)
     for expert in unique_h:
         selection = h == expert
