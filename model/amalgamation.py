@@ -22,7 +22,7 @@ def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001
 
     return torch.matmul(grad_p, hess_grad)
 
-def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
+def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
     """
     Compute a stratified cross validation to estimate the influence of each points
 
@@ -45,18 +45,19 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, split = 3):
     np.random.seed(42)
     np.random.shuffle(sort)
     x, y, h = x[sort], y[sort], h[sort]
-
+    print(h)
     # Create groups of observations to ensure one expert in each fold
-    g, unique_h = np.zeros_like(h), len(np.unique(h))
-    for expert in range(unique_h):
+    #h_unique = np.unique(h)
+    g, unique_h = np.zeros_like(h), np.unique(h)
+    for expert in unique_h:
         selection = h == expert
         g[selection] = np.arange(np.sum(selection))
 
-    splitter = StratifiedGroupKFold(split, shuffle = False)
-    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((unique_h, x.shape[0]))
+    splitter = StratifiedGroupKFold(n_split, shuffle = False)
+    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(unique_h), x.shape[0]))
     for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
         folds[test_index] = i
-        train_index, val_index = train_test_split(train_index, test_size = 0.15, shuffle = False)
+        train_index, val_index = train_test_split(np.array(train_index), test_size = 0.15, shuffle = False)
 
         # Train model on the subset
         model_cv = model(**params)
