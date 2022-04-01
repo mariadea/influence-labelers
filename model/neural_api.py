@@ -52,8 +52,9 @@ class BinaryMLP:
 
         # Estimate hessian of training loss
         theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
+        self.hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
         try:
-            self.hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
+            torch.inverse(self.hess)
         except:
             raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
 

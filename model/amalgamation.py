@@ -41,10 +41,12 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
     x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
 
     # Shuffle data - Need separation from fold to ensure group
-#     sort = np.arange(len(h))
-#     np.random.seed(42)
-#     np.random.shuffle(sort)
-#     x, y, h = x[sort], y[sort], h[sort]
+    sort = np.arange(len(h))
+    np.random.seed(42)
+    np.random.shuffle(sort)
+    resort = np.zeros_like(sort)
+    resort[sort] = np.arange(len(h))
+    x, y, h = x[sort], y[sort], h[sort]
     
     # Create groups of observations to ensure one expert in each fold
     g, unique_h = np.zeros_like(h), np.unique(h)
@@ -69,9 +71,8 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
         predictions[test_index] = calibrated.predict_proba(pred_test)[:, 1]
 
         # Compute influence
-        influence[:, test_index] = model_cv.influence(x[test_index])
-
-    return folds, predictions, influence
+        influence[:len(np.unique(h[train_index])), test_index] = model_cv.influence(x[test_index])
+    return folds[resort], predictions[resort], influence[:, resort]
 
 def center_mass(influence_point):
     inf_sorted = np.sort(np.abs(influence_point))[::-1]
