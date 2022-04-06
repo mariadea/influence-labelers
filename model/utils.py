@@ -44,7 +44,7 @@ def create_mlp(inputdim, layers, activation, dropout):
 
 def train_mlp(model,
             x_train, y_train, x_valid, y_valid, l1_penalty = 0.001,
-            n_iter = 1, lr = 1e-3, weight_decay = 0.001, bs = 100):
+            n_iter = 1000, lr = 1e-3, weight_decay = 0., bs = 100):
 
     # Separate oprimizer as one might need more time to converge
     optimizer = torch.optim.Adam(model.parameters(), lr = lr, weight_decay = weight_decay)
@@ -72,7 +72,7 @@ def train_mlp(model,
 
         model.eval()
         xb, yb = x_valid, y_valid
-        valid_loss = compute_loss(model, xb, yb).item() 
+        valid_loss = compute_loss(model, xb, yb, l1_penalty).item() 
         t_bar.set_description("Loss: {:.3f}".format(valid_loss))
 
         if valid_loss < previous_loss:

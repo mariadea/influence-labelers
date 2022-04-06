@@ -52,7 +52,8 @@ class BinaryMLP:
 
         # Estimate hessian of training loss
         theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
-        self.hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
+        hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
+        self.hess = hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
         try:
             torch.inverse(self.hess)
         except:
@@ -102,14 +103,13 @@ class BinaryMLP:
 
         grad_p = jacobian(lambda weight: self.torch_model.replace_last_weights(weight)(x), theta, create_graph = True).squeeze()
 
-        # Remove null theta from hessian
-        hess = self.hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
+        # Remove null theta
         grad_p = grad_p[:, theta.squeeze() > 0]
 
         for i, expert in enumerate(self.experts):
             influence_matrix[i] = compute_influence(self.torch_model, grad_p, 
                 self.x[self.experts_training == expert], self.y[self.experts_training == expert], 
-                hess, l1_penalty = self.l1_penalty).detach()
+                self.hess, l1_penalty = self.l1_penalty).detach()
 
         return influence_matrix
 
