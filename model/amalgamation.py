@@ -10,12 +10,12 @@ from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
 from .loss import compute_loss
 
-def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001):
+def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001, cutting_threshold = 0):
     theta = model.get_last_weights()
 
     # Compute impact on training of one user
     grad_h, = grad(compute_loss(model, x_h, y_h, l1_penalty = l1_penalty), theta, create_graph = True)
-    grad_h = grad_h[theta > 0].squeeze()
+    grad_h = grad_h[theta.abs() > cutting_threshold].squeeze()
 
     # Inverse hessian and multiply
     hess_grad = solve(hessian_train, grad_h) #TODO: Approximate instead as in https://github.com/nimarb/pytorch_influence_functions

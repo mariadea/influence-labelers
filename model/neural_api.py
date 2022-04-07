@@ -15,9 +15,10 @@ class BinaryMLP:
         Preprocess data to shape it to the right format
     """
 
-    def __init__(self, **params):
+    def __init__(self, cutting_threshold = 0.0001, **params):
         self.params = params
         self.fitted = False
+        self.cutting_threshold = cutting_threshold
 
     def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, random_state = 42, **args):
         """
@@ -53,7 +54,7 @@ class BinaryMLP:
         # Estimate hessian of training loss
         theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
         hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
-        self.hess = hess[theta.squeeze() > 0, :][:, theta.squeeze() > 0]
+        self.hess = hess[theta.abs().squeeze() > self.cutting_threshold, :][:, theta.abs().squeeze() > self.cutting_threshold]
         try:
             torch.inverse(self.hess)
         except:
@@ -104,12 +105,12 @@ class BinaryMLP:
         grad_p = jacobian(lambda weight: self.torch_model.replace_last_weights(weight)(x), theta, create_graph = True).squeeze()
 
         # Remove null theta
-        grad_p = grad_p[:, theta.squeeze() > 0]
+        grad_p = grad_p[:, theta.abs().squeeze() > self.cutting_threshold]
 
         for i, expert in enumerate(self.experts):
             influence_matrix[i] = compute_influence(self.torch_model, grad_p, 
                 self.x[self.experts_training == expert], self.y[self.experts_training == expert], 
-                self.hess, l1_penalty = self.l1_penalty).detach()
+                self.hess, l1_penalty = self.l1_penalty, cutting_threshold = self.cutting_threshold).detach()
 
         return influence_matrix
 
