@@ -22,7 +22,7 @@ def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001
 
     return torch.matmul(grad_p, hess_grad)
 
-def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
+def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {}, n_split = 3):
     """
     Compute a stratified cross validation to estimate the influence of each points
 
@@ -31,6 +31,7 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
         x (np.array pd.DataFrame): Covariates
         y (np.array pd.DataFrame): Associated outcome
         h (np.array pd.DataFrame): Associated expert
+        l1_penalties (list float): L1 penalty to explore until inversion of the hessian
         params (Dict): Dictionary to initialize the model with
         fit_params (Dict): Dictionary for training
         split (int): Number of fold used for the stratified computation of influence
@@ -61,8 +62,13 @@ def influence_cv(model, x, y, h, params = {}, fit_params = {}, n_split = 3):
         train_index, val_index = train_test_split(np.array(train_index), test_size = 0.15, shuffle = False)
 
         # Train model on the subset
-        model_cv = model(**params)
-        model_cv.fit(x[train_index], y[train_index], h[train_index], **fit_params, val = (x[val_index], y[val_index]))
+        for l1 in l1_penalties:
+            try:
+                model_cv = model(**params)
+                model_cv.fit(x[train_index], y[train_index], h[train_index], l1_penalty = l1, **fit_params, val = (x[val_index], y[val_index]))
+                break
+            except:
+                print('Iteration {} - L1 = {} not large enough'.format(i, l1))
 
         # Calibrate NN on validation set - Platt
         pred_val = model_cv.predict(x[val_index])
