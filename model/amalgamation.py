@@ -65,7 +65,7 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {
         for l1 in l1_penalties:
             try:
                 model_cv = model(**params)
-                model_cv.fit(x[train_index], y[train_index], h[train_index], l1_penalty = l1, **fit_params, val = (x[val_index], y[val_index]))
+                model_cv.fit(x[train_index], y[train_index], h[train_index], l1_penalty = l1, check = True, **fit_params, val = (x[val_index], y[val_index]))
                 break
             except:
                 print('Iteration {} - L1 = {} not large enough'.format(i, l1))

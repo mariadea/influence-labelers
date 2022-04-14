@@ -20,7 +20,7 @@ class BinaryMLP:
         self.fitted = False
         self.cutting_threshold = cutting_threshold
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, random_state = 42, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, random_state = 42, check = False, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
@@ -55,10 +55,13 @@ class BinaryMLP:
         theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
         hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
         self.hess = hess[theta.abs().squeeze() > self.cutting_threshold, :][:, theta.abs().squeeze() > self.cutting_threshold]
-        try:
-            torch.inverse(self.hess)
-        except:
-            raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
+        if check:
+            try:
+                torch.inverse(self.hess)
+            except:
+                raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
+        else:
+            print("Warning: Model's hessian might not be invertible.")
 
         return self
 
