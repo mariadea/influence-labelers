@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import torch
 import torch.nn as nn
 from torch.linalg import solve
@@ -5,7 +6,6 @@ from torch.autograd import grad
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 
 from .loss import compute_loss
@@ -22,6 +22,41 @@ def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001
 
     return torch.matmul(grad_p, hess_grad)
 
+def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {}, fit_params = {}):
+    """
+        Estimate the influence of x_apply after training model on x, y, h
+
+        Args:
+            model (Object): Create a model (need to have predict and influence functions)
+            x (np.array pd.DataFrame): Covariates
+            y (np.array pd.DataFrame): Associated outcome
+            h (np.array pd.DataFrame): Associated expert
+            x_apply (np.array pd.DataFrame): Covariates of set to compute
+            l1_penalties (list float): L1 penalty to explore until inversion of the hessian
+            params (Dict): Dictionary to initialize the model with
+            fit_params (Dict): Dictionary for training
+
+        Returns:
+            predictions, influence: Predictions by the model and influence (dim len(x) * num experts)
+    """
+    x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
+
+    # Train model
+    x_train, x_val, y_train, y_val, h_train, _ = train_test_split(x, y, h, test_size = 0.15, shuffle = True, random_state = 42)
+
+    # Train model on the subset
+    for l1 in l1_penalties:
+        try:
+            model_l1 = model(**params)
+            model_l1.fit(x, y, h, l1_penalty = l1, check = True, **fit_params, val = (x_val, y_val), platt_calibration = True)
+            break
+        except Exception as e:
+            print('L1 = {} not large enough'.format(l1))
+    else:
+        raise ValueError('None of the l1 penalties led to an invertible hessian.')
+
+    return model_l1.predict(x_apply), model_l1.influence(x_apply)
+
 def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {}, n_split = 3):
     """
     Compute a stratified cross validation to estimate the influence of each points
@@ -34,7 +69,7 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {
         l1_penalties (list float): L1 penalty to explore until inversion of the hessian
         params (Dict): Dictionary to initialize the model with
         fit_params (Dict): Dictionary for training
-        split (int): Number of fold used for the stratified computation of influence
+        n_split (int): Number of fold used for the stratified computation of influence
 
     Returns:
         folds, predictions, influence: Arrays of each point fold, predictions by the model and influence (dim len(x) * num experts)
@@ -59,25 +94,8 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {
     folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(unique_h), x.shape[0]))
     for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
         folds[test_index] = i
-        train_index, val_index = train_test_split(np.array(train_index), test_size = 0.15, shuffle = False)
+        predictions[test_index], influence[:len(np.unique(h[train_index])), test_index] = influence_estimate(model, x[train_index], y[train_index], h[train_index], x[test_index], l1_penalties = l1_penalties, params = params, fit_params = fit_params)
 
-        # Train model on the subset
-        for l1 in l1_penalties:
-            try:
-                model_cv = model(**params)
-                model_cv.fit(x[train_index], y[train_index], h[train_index], l1_penalty = l1, check = True, **fit_params, val = (x[val_index], y[val_index]))
-                break
-            except:
-                print('Iteration {} - L1 = {} not large enough'.format(i, l1))
-
-        # Calibrate NN on validation set - Platt
-        pred_val = model_cv.predict(x[val_index])
-        pred_test = model_cv.predict(x[test_index])
-        calibrated = LogisticRegression().fit(pred_val, y[val_index])
-        predictions[test_index] = calibrated.predict_proba(pred_test)[:, 1]
-
-        # Compute influence
-        influence[:len(np.unique(h[train_index])), test_index] = model_cv.influence(x[test_index])
     return folds[resort], predictions[resort], influence[:, resort]
 
 def center_mass(influence_point):

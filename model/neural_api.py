@@ -2,7 +2,7 @@ import torch
 from torch.autograd.functional import hessian, jacobian
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from sklearn.linear_model import LogisticRegression
 
 from .utils import train_mlp
 from .loss import compute_loss
@@ -20,7 +20,7 @@ class BinaryMLP:
         self.fitted = False
         self.cutting_threshold = cutting_threshold
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, random_state = 42, check = False, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, platt_calibration = False, random_state = 42, check = False, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
@@ -30,6 +30,7 @@ class BinaryMLP:
                 vsize (float, optional): Percentage of data used for validation. Ignored if val is provided. Defaults to 0.15.
                 val ((np.ndarray, np.ndarray), optional): Tuple of validation data and labels. Defaults to None.
                 l1_penalty (float, optional): L1 penalty used for the loss
+                platt_calibration (bool, optional): Compute a platt calibration for the model (based on val set).
                 random_state (int, optional): Random seed used for training and data split. Defaults to 100.
 
             Returns:
@@ -50,18 +51,27 @@ class BinaryMLP:
         # Update model
         self.torch_model = model.eval()
         self.fitted = True
+        self.calibrated = False
 
         # Estimate hessian of training loss
         theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
         hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
         self.hess = hess[theta.abs().squeeze() > self.cutting_threshold, :][:, theta.abs().squeeze() > self.cutting_threshold]
+        
         if check:
             try:
                 torch.inverse(self.hess)
             except:
                 raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
         else:
-            print("Warning: Model's hessian might not be invertible.")
+            print("Warning: No check on hessian - might not be invertible.")
+
+        # Compute calibration
+        if platt_calibration:
+            # Calibrate NN on validation set - Platt
+            pred_val = self.torch_model(x_val).detach().numpy()
+            self.calibration = LogisticRegression().fit(pred_val, y_val)
+            self.calibrated = True
 
         return self
 
@@ -77,7 +87,8 @@ class BinaryMLP:
         """
         x = self._preprocess_(x)
         if self.fitted:
-            return self.torch_model(x).detach().numpy()
+            out_nn = self.torch_model(x).detach().numpy()
+            return self.calibration.predict_proba(out_nn)[:, 1] if self.calibrated else out_nn
         else:
             raise Exception("The model has not been fitted yet. Please fit the " +
                             "model using the `fit` method on some training data " +
