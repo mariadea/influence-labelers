@@ -42,13 +42,10 @@ def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {},
     x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
 
     # Train model
-    x_train, x_val, y_train, y_val, h_train, _ = train_test_split(x, y, h, test_size = 0.15, shuffle = True, random_state = 42)
-
-    # Train model on the subset
     for l1 in l1_penalties:
         try:
             model_l1 = model(**params)
-            model_l1.fit(x, y, h, l1_penalty = l1, check = True, **fit_params, val = (x_val, y_val), platt_calibration = True)
+            model_l1.fit(x, y, h, l1_penalty = l1, check = True, **fit_params, platt_calibration = True)
             break
         except Exception as e:
             print('L1 = {} not large enough'.format(l1))
