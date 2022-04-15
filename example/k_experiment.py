@@ -133,4 +133,4 @@ for k in range(args.k):
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
 
-pkl.dump(results, open('../results/{}_{}.pkl'.format(args.dataset, args.k), 'wb'))
+    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}_{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, 'sel' if args.selective else 'non_sel'), 'wb'))
