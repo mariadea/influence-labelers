@@ -97,17 +97,16 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {
 
 def center_mass(influence_point):
     inf_sorted = np.sort(np.abs(influence_point))[::-1]
-    center = np.dot(inf_sorted, np.arange(len(influence_point))) / np.sum(inf_sorted)
+    total = np.sum(inf_sorted)
+    center = np.dot(inf_sorted, np.arange(len(influence_point))) / total if total > 0 else 1.
     return center
 
 def opposing(influence_point):
     inf_pos = influence_point[np.where(influence_point > 0)]
     inf_neg = influence_point[np.where(influence_point < 0)]
 
-    total = inf_pos.sum() - inf_neg.sum()
-    opposing = np.max([inf_pos.sum(), - inf_neg.sum()]) / total
-
-    return opposing
+    total = inf_pos.sum() - inf_neg.sum() # Sum of absolute values
+    return np.max([inf_pos.sum(), - inf_neg.sum()]) / total if total > 0 else 1.
 
 def compute_agreeability(influence):
     """
