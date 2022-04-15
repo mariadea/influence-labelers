@@ -63,8 +63,6 @@ class BinaryMLP:
                 torch.inverse(self.hess)
             except:
                 raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
-        else:
-            print("Warning: No check on hessian - might not be invertible.")
 
         # Compute calibration
         if platt_calibration:
