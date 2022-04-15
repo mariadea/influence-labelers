@@ -20,7 +20,7 @@ class BinaryMLP:
         self.fitted = False
         self.cutting_threshold = cutting_threshold
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0.001, platt_calibration = False, random_state = 42, check = False, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0., platt_calibration = False, random_state = 42, check = False, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
