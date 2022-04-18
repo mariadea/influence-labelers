@@ -60,9 +60,9 @@ elif args.dataset == 'child':
     D = D.reshape((D.shape[0],))
     Y_obs = Y_obs.reshape((Y_obs.shape[0],))
 
-    target = pd.DataFrame({'D': D, 'Y1': Y_obs, 'Y2': Y_serv, 'Y3': Y_sub}, index = refer_ids)
-    experts = pd.Series(screener_ids, index = refer_ids)
-    covariates = pd.DataFrame(X, index = refer_ids)
+    target = pd.DataFrame({'D': D, 'Y1': Y_obs, 'Y2': Y_serv, 'Y3': Y_sub})
+    experts = pd.Series(screener_ids)
+    covariates = pd.DataFrame(X)
 
 
 # Iterate k times the algorithm
