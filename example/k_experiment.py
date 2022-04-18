@@ -14,7 +14,7 @@ args = parser.parse_args()
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
 params = {'layers': [] if args.log else [100]}  # If = [] equivalent to a simple logistic regression
-l1_penalties = [0.001, 0.01, 0.1, 1, 5, 10.]
+l1_penalties = [0.001, 0.01, 0.1, 1, 5, 10., 100., 1000., 10000]
 
 rho = 0.05 # Control which point to consider from a confience point of view
 tau = 1.0  # Balance between observed and expert labels
