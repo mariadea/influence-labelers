@@ -23,15 +23,18 @@ tau = 1.0  # Balance between observed and expert labels
 import pandas as pd
 import pickle as pkl
 import numpy as np
+from sklearn.model_selection import GroupShuffleSplit, ShuffleSplit
 
 if args.dataset == 'mimic':
     data_set = "../data/triage_clean.csv" 
     triage = pd.read_csv(data_set, index_col = [0, 1])
+    splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
 elif '_' in args.dataset:
     data_set = "../data/triage_scenario_{}.csv".format(args.dataset[args.dataset.index('_') + 1:]) 
     triage = pd.read_csv(data_set, index_col = [0, 1])
+    splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
 elif args.dataset == 'child':
@@ -54,7 +57,7 @@ elif args.dataset == 'child':
     Y_sub = np.delete(Y_sub, drop_idx, axis = 0)
     Y_obs = np.delete(Y_obs, drop_idx, axis = 0)
     D = np.delete(D, drop_idx, axis = 0)
-    refer_ids = np.delete(refer_ids, drop_idx, axis = 0).flatten()
+    groups = np.delete(refer_ids, drop_idx, axis = 0).flatten()
     screener_ids = np.delete(screener_ids, drop_idx, axis = 0)
 
     D = D.reshape((D.shape[0],))
@@ -63,23 +66,23 @@ elif args.dataset == 'child':
     target = pd.DataFrame({'D': D, 'Y1': Y_obs, 'Y2': Y_serv, 'Y3': Y_sub})
     experts = pd.Series(screener_ids)
     covariates = pd.DataFrame(X)
-
+    splitter = GroupShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42)
 
 # Iterate k times the algorithm
 import sys
 sys.path.append('../')
 
 from model import *
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import train_test_split
 
 results = []
 # Monte Carlo cross validation
-for k in range(args.k):
-    print("Running iteration {} / {}".format(k, args.k))
+for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
+    print("Running iteration {} / {}".format(k + 1, args.k))
 
     # Split data
-    cov_train, cov_test, tar_train, tar_test, nur_train, nur_test = train_test_split(covariates, target, experts, test_size = 0.2, random_state = k)
+    cov_train, cov_test, tar_train, tar_test, nur_train, nur_test = covariates.iloc[train], \
+            covariates.iloc[test], target.iloc[train], target.iloc[test], \
+            experts.iloc[train], experts.iloc[test]
 
     # Train on decision
     model = BinaryMLP(**params)
