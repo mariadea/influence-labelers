@@ -86,7 +86,7 @@ class BinaryMLP:
         x = self._preprocess_(x)
         if self.fitted:
             out_nn = self.torch_model(x).detach().numpy()
-            return self.calibration.predict_proba(out_nn)[:, 1] if self.calibrated else out_nn
+            return self.calibration.predict_proba(out_nn)[:, 1] if self.calibrated else out_nn.flatten()
         else:
             raise Exception("The model has not been fitted yet. Please fit the " +
                             "model using the `fit` method on some training data " +
