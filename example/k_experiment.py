@@ -5,7 +5,6 @@ import argparse
 parser = argparse.ArgumentParser(description = 'Running k experiments of amalgamation.')
 parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).', choices = ['child', 'mimic', 'mimic_1', 'mimic_2', 'mimic_3', 'mimic_4'])
 parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
-parser.add_argument('--selective', '-s', action='store_true', help = 'Run under selective labels.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
 parser.add_argument('-p1', default = 2.8, type = float, help = 'Threshold on center mass.')
 parser.add_argument('-p2', default = 0.95, type = float, help = 'Threshold on opposing.')
@@ -31,11 +30,15 @@ if args.dataset == 'mimic':
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
+    selective = False
+
 elif '_' in args.dataset:
     data_set = "../data/triage_scenario_{}.csv".format(args.dataset[args.dataset.index('_') + 1:]) 
     triage = pd.read_csv(data_set, index_col = [0, 1])
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
+
+    selective = False
 
 elif args.dataset == 'child':
     with open('../../data/ChildWelfare/X_preprocess.pkl', 'rb') as handle:
@@ -67,6 +70,8 @@ elif args.dataset == 'child':
     experts = pd.Series(screener_ids)
     covariates = pd.DataFrame(X[:, :-1]) # Remove 0 columns
     splitter = GroupShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42)
+
+    selective = True
 
 # Iterate k times the algorithm
 import sys
@@ -107,7 +112,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     tar_train.loc[high_agr_correct, 'Ya'] = (1 - tau) * tar_train['Y1'][high_agr_correct].copy() \
                                                 + tau * tar_train['D'][high_agr_correct].copy()
 
-    index_amalg = ((tar_train['D'] == 1) | high_agr_correct) if args.selective else tar_train['D'].isin([0, 1])
+    index_amalg = ((tar_train['D'] == 1) | high_agr_correct) if selective else tar_train['D'].isin([0, 1])
 
 
     # Amalgamation model
@@ -117,7 +122,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
 
     # Observed outcome
-    index_observed = tar_train['D'] == 1 if args.selective else tar_train['D'].isin([0, 1])
+    index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
     model = BinaryMLP(**params)
     model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups.iloc[train][index_observed])
     pred_obs_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Observed')
@@ -129,7 +134,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     # Compute which test points are part of A for test set
     predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, fit_params = {'groups': None if groups is None else groups.iloc[train]})
     center_metric, opposing_metric = compute_agreeability(influence_test)
-    high_conf_test = (predictions_test > (1 - rho)) | (predictions_test < rho)
+    high_conf_test = (predictions_test > (1 - rho)) if args.dataset == 'child' else ((predictions_test > (1 - rho)) | (predictions_test < rho))
     high_agr_test = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf_test
     high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < rho) & high_agr_test
 
@@ -140,4 +145,4 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
 
-    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}_{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, 'sel' if args.selective else 'non_sel'), 'wb'))
+    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2), 'wb'))
