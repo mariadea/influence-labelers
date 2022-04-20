@@ -8,6 +8,7 @@ parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
 parser.add_argument('-p1', default = 2.8, type = float, help = 'Threshold on center mass.')
 parser.add_argument('-p2', default = 0.95, type = float, help = 'Threshold on opposing.')
+parser.add_argument('-p3', default = 0., type = float, help = 'Threshold on flat influence. Default: ignore.')
 args = parser.parse_args()
 
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
@@ -104,9 +105,11 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     center_metric, opposing_metric = compute_agreeability(influence)
     
     # Amalgamation
+    flat_influence = (np.abs(influence) > args.p3).sum(0) == 0
+    print(flat_influence)
     high_conf = (predictions > (1 - rho)) | (predictions < rho)
     high_agr = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf
-    high_agr_correct = ((predictions - tar_train['D']).abs() < rho) & high_agr
+    high_agr_correct = (((predictions - tar_train['D']).abs() < rho) & high_agr) | flat_influence
 
     tar_train.loc[:, 'Ya'] = tar_train['Y1'].copy().astype(int)
     tar_train.loc[high_agr_correct, 'Ya'] = (1 - tau) * tar_train['Y1'][high_agr_correct].copy() \
@@ -145,4 +148,4 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
 
-    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2), 'wb'))
+    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, args.p3), 'wb'))
