@@ -13,9 +13,8 @@ args = parser.parse_args()
 
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
-params = {'layers': [] if args.log else [[node] * layer for node in [10, 50, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
+params = {'layers': [] if args.log else [[node] * layer for node in [10, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
 l1_penalties = [0.001, 0.01, 0.1, 1., 10., 100., 1000., 10000.]
-print(params)
 
 rho = 0.05 # Control which point to consider from a confience point of view
 tau = 1.0  # Balance between observed and expert labels
@@ -87,15 +86,14 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Train on decision
     model = BinaryMLP(**params)
-    model = model.fit(cov_train, tar_train['D'], nur_train, platt_calibration = True)
+    model = model.fit(cov_train, tar_train['D'], nur_train, platt_calibration = True, groups = None if groups is None else groups.iloc[train])
     pred_h_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Human')
 
 
     # Fold evaluation of influences
     try:
-        folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties)
-    except Exception as e:
-        print(e)
+        folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties, fit_params = {'groups': None if groups is None else groups.iloc[train]})
+    except:
         print('Iteration {} - Not invertible hessian'.format(k))
         continue
     center_metric, opposing_metric = compute_agreeability(influence)
@@ -114,14 +112,14 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Amalgamation model
     model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_amalg], tar_train[index_amalg]['Ya'], nur_train[index_amalg])
+    model = model.fit(cov_train[index_amalg], tar_train[index_amalg]['Ya'], nur_train[index_amalg], groups = None if groups is None else groups.iloc[train][index_amalg])
     pred_amalg_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Amalgamation')
 
 
     # Observed outcome
     index_observed = tar_train['D'] == 1 if args.selective else tar_train['D'].isin([0, 1])
     model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed])
+    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups.iloc[train][index_observed])
     pred_obs_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Observed')
 
 
@@ -129,7 +127,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     pred_hyb_test = pred_h_test.copy().rename('Hybrid')
 
     # Compute which test points are part of A for test set
-    predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties)
+    predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, fit_params = {'groups': None if groups is None else groups.iloc[train]})
     center_metric, opposing_metric = compute_agreeability(influence_test)
     high_conf_test = (predictions_test > (1 - rho)) | (predictions_test < rho)
     high_agr_test = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf_test
@@ -137,7 +135,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Retrain a model on non almagamation only and calibrate: Rely on observed
     model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True)
+    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups.iloc[train][index_observed])
     pred_hyb_test.loc[~high_agr_correct_test] = model.predict(cov_test.loc[~high_agr_correct_test])
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import ParameterGrid
+from sklearn.model_selection import GroupShuffleSplit, ShuffleSplit
 
 from .utils import train_mlp
 from .loss import compute_loss
@@ -16,12 +17,12 @@ class BinaryMLP:
         Preprocess data to shape it to the right format
     """
 
-    def __init__(self, cutting_threshold = 0.0001, **params):
+    def __init__(self, cutting_threshold = 0., **params):
         self.params = ParameterGrid(params)
         self.fitted = False
         self.cutting_threshold = cutting_threshold
 
-    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0., platt_calibration = False, random_state = 42, check = False, **args):
+    def fit(self, x, y, h, vsize = 0.15, val = None, l1_penalty = 0., platt_calibration = False, random_state = 42, check = False, groups = None, **args):
         """
             This method is used to train an instance of multi layer perceptron
 
@@ -38,7 +39,7 @@ class BinaryMLP:
                 self
         """
         # Preprocess data
-        processed_data = self._preprocess_train_(x, y, vsize, val, random_state)
+        processed_data = self._preprocess_train_(x, y, vsize, val, groups, random_state)
         x_train, y_train, x_val, y_val, x_dev, y_dev = processed_data
         self.experts_training, self.x, self.y = h.values if isinstance(h, pd.Series) else h, self._preprocess_(x), self._preprocess_(y)
         self.experts = np.sort(np.unique(h))
@@ -143,24 +144,23 @@ class BinaryMLP:
         x = x.values if (isinstance(x, pd.DataFrame) or isinstance(x, pd.Series)) else x
         return torch.from_numpy(x).double()
 
-    def _preprocess_train_(self, x, y, vsize, val, random_state):
-        np.random.seed(random_state)
-        vsize = int(vsize * x.shape[0])
+    def _preprocess_train_(self, x, y, vsize, val, groups = None, random_state = 42):
+        if groups is None:
+            splitter = ShuffleSplit(n_splits = 1, test_size = vsize, random_state = random_state)
+        else:
+            splitter = GroupShuffleSplit(n_splits = 1, test_size = vsize, random_state = random_state)
+        
+        x_train = self._preprocess_(x)
+        y_train = self._preprocess_(y)
 
-        indices = np.arange(x.shape[0])
-        np.random.shuffle(indices)
-
-        x = self._preprocess_(x)
-        y = self._preprocess_(y)
-
-        x_train, y_train = x[indices], y[indices]
-
-        x_dev, y_dev = x_train[-vsize:], y_train[-vsize:]
-        x_train, y_train = x_train[:-vsize], y_train[:-vsize]
+        train, dev = next(splitter.split(x_train, y_train, groups))
+        x_dev, y_dev = x_train[dev], y_train[dev]
+        x_train, y_train = x_train[train], y_train[train]
 
         if val is None:
-            x_val, y_val = x_train[-vsize:], y_train[-vsize:]
-            x_train, y_train = x_train[:-vsize], y_train[:-vsize]
+            train, val = next(splitter.split(x_train, y_train, None if groups is None else groups[train]))
+            x_val, y_val = x_train[val], y_train[val]
+            x_train, y_train = x_train[train], y_train[train]
         else:
             x_val, y_val = val
             x_val = self._preprocess_(x_val)
