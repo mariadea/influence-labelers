@@ -106,7 +106,6 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     
     # Amalgamation
     flat_influence = (np.abs(influence) > args.p3).sum(0) == 0
-    print(flat_influence)
     high_conf = (predictions > (1 - rho)) | (predictions < rho)
     high_agr = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf
     high_agr_correct = (((predictions - tar_train['D']).abs() < rho) & high_agr) | flat_influence
