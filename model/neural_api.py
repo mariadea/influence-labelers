@@ -3,6 +3,7 @@ from torch.autograd.functional import hessian, jacobian
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import ParameterGrid
 
 from .utils import train_mlp
 from .loss import compute_loss
@@ -16,7 +17,7 @@ class BinaryMLP:
     """
 
     def __init__(self, cutting_threshold = 0.0001, **params):
-        self.params = params
+        self.params = ParameterGrid(params)
         self.fitted = False
         self.cutting_threshold = cutting_threshold
 
@@ -27,7 +28,7 @@ class BinaryMLP:
             Args:
                 x (np.ndarray): A numpy array of the input features
                 y (np.ndarray): A numpy array of the target label (1 dimensional for binary classification)
-                vsize (float, optional): Percentage of data used for validation. Ignored if val is provided. Defaults to 0.15.
+                vsize (float, optional): Percentage of data used for validation and dev. Defaults to 0.15.
                 val ((np.ndarray, np.ndarray), optional): Tuple of validation data and labels. Defaults to None.
                 l1_penalty (float, optional): L1 penalty used for the loss
                 platt_calibration (bool, optional): Compute a platt calibration for the model (based on val set).
@@ -38,18 +39,25 @@ class BinaryMLP:
         """
         # Preprocess data
         processed_data = self._preprocess_train_(x, y, vsize, val, random_state)
-        x_train, y_train, x_val, y_val = processed_data
+        x_train, y_train, x_val, y_val, x_dev, y_dev = processed_data
         self.experts_training, self.x, self.y = h.values if isinstance(h, pd.Series) else h, self._preprocess_(x), self._preprocess_(y)
         self.experts = np.sort(np.unique(h))
         self.l1_penalty = l1_penalty # Save to ensure l1 penalyt consistent
 
-        # Create and train model
-        torch.manual_seed(random_state)
-        model = self._gen_torch_model_(x_train.size(1), 1)
-        model = train_mlp(model, x_train, y_train, x_val, y_val, l1_penalty = l1_penalty, **args)
+        # Find best model - Grid search
+        best_model, best_perf = None, np.inf
+        for param in self.params:
+            # Create and train model
+            torch.manual_seed(random_state)
+            model = self._gen_torch_model_(x_train.size(1), 1, param)
+            model = train_mlp(model, x_train, y_train, x_val, y_val, l1_penalty = l1_penalty, **args)
+            perf = compute_loss(model, x_dev, y_dev, l1_penalty).item()
+            if perf < best_perf:
+                best_perf = perf
+                best_model = model
 
         # Update model
-        self.torch_model = model.eval()
+        self.torch_model = best_model.eval()
         self.fitted = True
         self.calibrated = False
 
@@ -126,9 +134,9 @@ class BinaryMLP:
 
         return influence_matrix
 
-    def _gen_torch_model_(self, inputdim, outputdim):
+    def _gen_torch_model_(self, inputdim, outputdim, param):
         assert outputdim == 1, "Multi class not handle at the moment"
-        model = MultiLayerPerceptron_Torch(inputdim, outputdim, **self.params).double()
+        model = MultiLayerPerceptron_Torch(inputdim, outputdim, **param).double()
         return model
 
     def _preprocess_(self, x):
@@ -137,6 +145,7 @@ class BinaryMLP:
 
     def _preprocess_train_(self, x, y, vsize, val, random_state):
         np.random.seed(random_state)
+        vsize = int(vsize * x.shape[0])
 
         indices = np.arange(x.shape[0])
         np.random.shuffle(indices)
@@ -146,8 +155,10 @@ class BinaryMLP:
 
         x_train, y_train = x[indices], y[indices]
 
+        x_dev, y_dev = x_train[-vsize:], y_train[-vsize:]
+        x_train, y_train = x_train[:-vsize], y_train[:-vsize]
+
         if val is None:
-            vsize = int(vsize * x_train.shape[0])
             x_val, y_val = x_train[-vsize:], y_train[-vsize:]
             x_train, y_train = x_train[:-vsize], y_train[:-vsize]
         else:
@@ -155,4 +166,4 @@ class BinaryMLP:
             x_val = self._preprocess_(x_val)
             y_val = self._preprocess_(y_val)
 
-        return x_train, y_train, x_val, y_val
+        return x_train, y_train, x_val, y_val, x_dev, y_dev
