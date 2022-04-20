@@ -14,7 +14,7 @@ args = parser.parse_args()
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
 params = {'layers': [] if args.log else [200, 100]}  # If = [] equivalent to a simple logistic regression
-l1_penalties = [0.001, 0.01, 0.1, 1, 5, 10., 100., 1000., 10000]
+l1_penalties = [0.001, 0.01, 0.1, 1., 10., 100., 1000., 10000.]
 
 rho = 0.05 # Control which point to consider from a confience point of view
 tau = 1.0  # Balance between observed and expert labels
@@ -91,7 +91,11 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
 
     # Fold evaluation of influences
-    folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties)
+    try:
+        folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties)
+    except:
+        print('Iteration {} - Not inveritble hessian')
+        continue
     center_metric, opposing_metric = compute_agreeability(influence)
     
     # Amalgamation
@@ -99,7 +103,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     high_agr = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf
     high_agr_correct = ((predictions - tar_train['D']).abs() < rho) & high_agr
 
-    tar_train['Ya'] = tar_train['Y1'].copy().astype(int)
+    tar_train.loc[:, 'Ya'] = tar_train['Y1'].copy().astype(int)
     tar_train.loc[high_agr_correct, 'Ya'] = (1 - tau) * tar_train['Y1'][high_agr_correct].copy() \
                                                 + tau * tar_train['D'][high_agr_correct].copy()
 
