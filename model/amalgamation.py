@@ -22,7 +22,7 @@ def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001
 
     return torch.matmul(grad_p, hess_grad)
 
-def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {}, fit_params = {}):
+def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {}, groups = None):
     """
         Estimate the influence of x_apply after training model on x, y, h
 
@@ -45,7 +45,7 @@ def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {},
     for l1 in l1_penalties:
         try:
             model_l1 = model(**params)
-            model_l1.fit(x, y, h, l1_penalty = l1, check = True, **fit_params, platt_calibration = True)
+            model_l1.fit(x, y, h, l1_penalty = l1, check = True, groups = groups, platt_calibration = True)
             break
         except Exception as e:
             print('L1 = {} not large enough'.format(l1))
@@ -54,7 +54,7 @@ def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {},
 
     return model_l1.predict(x_apply), model_l1.influence(x_apply)
 
-def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {}, n_split = 3):
+def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, groups = None, n_split = 3):
     """
     Compute a stratified cross validation to estimate the influence of each points
 
@@ -91,7 +91,9 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, fit_params = {
     folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(unique_h), x.shape[0]))
     for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
         folds[test_index] = i
-        predictions[test_index], influence[:len(np.unique(h[train_index])), test_index] = influence_estimate(model, x[train_index], y[train_index], h[train_index], x[test_index], l1_penalties = l1_penalties, params = params, fit_params = fit_params)
+        predictions[test_index], influence[:len(np.unique(h[train_index])), test_index] = influence_estimate(model, 
+            x[train_index], y[train_index], h[train_index], x[test_index], l1_penalties = l1_penalties, params = params,
+            groups = None if groups is None else groups[train_index])
 
     return folds[resort], predictions[resort], influence[:, resort]
 

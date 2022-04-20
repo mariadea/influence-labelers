@@ -97,7 +97,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Fold evaluation of influences
     try:
-        folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties, fit_params = {'groups': None if groups is None else groups[train]})
+        folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
     except:
         print('Iteration {} - Not invertible hessian'.format(k))
         continue
@@ -132,7 +132,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     pred_hyb_test = pred_h_test.copy().rename('Hybrid')
 
     # Compute which test points are part of A for test set
-    predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, fit_params = {'groups': None if groups is None else groups[train]})
+    predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
     center_metric, opposing_metric = compute_agreeability(influence_test)
     high_conf_test = (predictions_test > (1 - rho)) if args.dataset == 'child' else ((predictions_test > (1 - rho)) | (predictions_test < rho))
     high_agr_test = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf_test
