@@ -50,6 +50,7 @@ class BinaryMLP:
         for param in self.params:
             # Create and train model
             torch.manual_seed(random_state)
+            np.random.seed(random_state)
             model = self._gen_torch_model_(x_train.size(1), 1, param)
             model = train_mlp(model, x_train, y_train, x_val, y_val, l1_penalty = l1_penalty, **args)
             perf = compute_loss(model, x_dev, y_dev, l1_penalty).item()
@@ -77,7 +78,7 @@ class BinaryMLP:
         if platt_calibration:
             # Calibrate NN on validation set - Platt
             pred_val = self.torch_model(x_val).detach().numpy()
-            self.calibration = LogisticRegression().fit(pred_val, y_val)
+            self.calibration = LogisticRegression(random_state = random_state).fit(pred_val, y_val)
             self.calibrated = True
 
         return self
