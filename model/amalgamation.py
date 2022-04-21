@@ -6,7 +6,7 @@ from torch.autograd import grad
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedGroupKFold, train_test_split
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
 from .loss import compute_loss
 
@@ -73,29 +73,18 @@ def influence_cv(model, x, y, h, l1_penalties = [0], params = {}, groups = None,
     """
     x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
 
-    # Shuffle data - Need separation from fold to ensure group
-    sort = np.arange(len(h))
-    np.random.seed(42)
-    np.random.shuffle(sort)
-    resort = np.zeros_like(sort)
-    resort[sort] = np.arange(len(h))
-    x, y, h = x[sort], y[sort], h[sort]
-    
     # Create groups of observations to ensure one expert in each fold
-    g, unique_h = np.zeros_like(h), np.unique(h)
-    for expert in unique_h:
-        selection = h == expert
-        g[selection] = np.arange(np.sum(selection))
-
-    splitter = StratifiedGroupKFold(n_split, shuffle = False)
-    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(unique_h), x.shape[0]))
-    for i, (train_index, test_index) in enumerate(splitter.split(x, y, g)):
+    # And that groups are not splitted 
+    # => Stratified k fold (ensure each experts in each folds in similar amount) while respecting groups
+    splitter = StratifiedKFold(n_split, shuffle = True, random_state = 42) if groups is None else StratifiedGroupKFold(n_split, shuffle = True, random_state = 42)
+    folds, predictions, influence = np.zeros(len(x)), np.zeros(len(x)), np.zeros((len(np.unique(h)), x.shape[0]))
+    for i, (train_index, test_index) in enumerate(splitter.split(x, h, groups)):
         folds[test_index] = i
         predictions[test_index], influence[:len(np.unique(h[train_index])), test_index] = influence_estimate(model, 
             x[train_index], y[train_index], h[train_index], x[test_index], l1_penalties = l1_penalties, params = params,
             groups = None if groups is None else groups[train_index])
 
-    return folds[resort], predictions[resort], influence[:, resort]
+    return folds, predictions, influence
 
 def center_mass(influence_point):
     inf_sorted = np.sort(np.abs(influence_point))[::-1]
