@@ -107,8 +107,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     # Amalgamation
     flat_influence = (np.abs(influence) > args.p3).sum(0) == 0
     high_conf = (predictions > (1 - rho)) if args.dataset == 'child' else ((predictions > (1 - rho)) | (predictions < rho))
-    high_agr = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf
-    high_agr_correct = (((predictions - tar_train['D']).abs() < rho) & high_agr) | (flat_influence & high_conf)
+    high_agr = (((center_metric > args.p1) & (opposing_metric > args.p2)) | flat_influence) & high_conf
+    high_agr_correct = (((predictions - tar_train['D']).abs() < rho) & high_agr)
 
     ya = tar_train['Y1'].copy().astype(int)
     ya.loc[high_agr_correct] = (1 - tau) * tar_train.loc[high_agr_correct, 'Y1'].copy() \
@@ -138,8 +138,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     center_metric, opposing_metric = compute_agreeability(influence_test)
     flat_influence_test = (np.abs(influence_test) > args.p3).sum(0) == 0
     high_conf_test = (predictions_test > (1 - rho)) if args.dataset == 'child' else ((predictions_test > (1 - rho)) | (predictions_test < rho))
-    high_agr_test = (center_metric > args.p1) & (opposing_metric > args.p2) & high_conf_test
-    high_agr_correct_test = (((predictions_test - tar_test['D']).abs() < rho) & high_agr_test) | (flat_influence_test & high_conf_test)
+    high_agr_test = (((center_metric > args.p1) & (opposing_metric > args.p2)) | flat_influence_test) & high_conf_test
+    high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < rho) & high_agr_test
 
     # Retrain a model on non almagamation only and calibrate: Rely on observed
     model = BinaryMLP(**params)
