@@ -6,9 +6,9 @@ parser = argparse.ArgumentParser(description = 'Running k experiments of amalgam
 parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).', choices = ['child', 'mimic', 'mimic_1', 'mimic_2', 'mimic_3', 'mimic_4'])
 parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
-parser.add_argument('-p1', default = 2.8, type = float, help = 'Threshold on center mass.')
+parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
 parser.add_argument('-p2', default = 0.95, type = float, help = 'Threshold on opposing.')
-parser.add_argument('-p3', default = 0., type = float, help = 'Threshold on flat influence. Default: ignore.')
+parser.add_argument('-p3', default = 0.02, type = float, help = 'Threshold on flat influence. Default: ignore.')
 args = parser.parse_args()
 
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
@@ -79,7 +79,6 @@ import sys
 sys.path.append('../')
 
 from model import *
-
 results = []
 # Monte Carlo cross validation
 for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
@@ -90,11 +89,33 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
             covariates.iloc[test], target.iloc[train], target.iloc[test], \
             experts.iloc[train], experts.iloc[test]
 
+    def evaluate(predictions, p = 0.25):
+        from sklearn.metrics import roc_auc_score
+        # Overall Performances
+        print('ROC Performance')
+        for tar in ['Y1', 'Y2', 'YC', 'D']:
+            print('{} - {:.3f}'.format(tar, roc_auc_score(tar_test[tar], predictions)))
+        try:
+            predictions = pd.Series(predictions, index = tar_test.index)
+            
+            bot = predictions.nsmallest(n = int(p * len(tar_test)), keep = 'all')
+            older = cov_test.anchor_age == 1
+            bot = bot.index.intersection(older[older].index)
+            print('\nPredicted no risk - Older population')
+            for tar in ['Y1', 'Y2', 'YC', 'D']:
+                print('{} - {:.3f}'.format(tar, len(tar_test[tar].loc[bot]) / older.sum()))
+                
+            print('\nReal percentage - Older population')
+            for tar in ['Y1', 'Y2', 'YC', 'D']:
+                print('{} - {:.3f}'.format(tar, 1 - (tar_test[tar][older]).mean()))
+        except:
+            pass
+
     # Train on decision
     model = BinaryMLP(**params)
     model = model.fit(cov_train, tar_train['D'], nur_train, platt_calibration = True, groups = None if groups is None else groups[train])
     pred_h_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Human')
-
+    evaluate(pred_h_test)
 
     # Fold evaluation of influences
     try:
@@ -121,14 +142,14 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     model = BinaryMLP(**params)
     model = model.fit(cov_train[index_amalg], ya[index_amalg], nur_train[index_amalg], groups = None if groups is None else groups[train][index_amalg])
     pred_amalg_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Amalgamation')
-
+    evaluate(pred_amalg_test)
 
     # Observed outcome
     index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
     model = BinaryMLP(**params)
     model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
     pred_obs_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Observed')
-
+    evaluate(pred_obs_test)
 
     # Hybrid model: initialize rely on humans
     pred_hyb_test = pred_h_test.copy().rename('Hybrid')
@@ -145,7 +166,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     model = BinaryMLP(**params)
     model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups[train][index_observed])
     pred_hyb_test.loc[~high_agr_correct_test] = model.predict(cov_test.loc[~high_agr_correct_test])
+    evaluate(pred_hyb_test)
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
 
-    pkl.dump(results, open('../results/{}_{}_p1={}_p2=_{}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, args.p3), 'wb'))
+    pkl.dump(results, open('../results/{}_{}_p1={}_p2={}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, args.p3), 'wb'))
