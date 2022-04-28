@@ -46,7 +46,7 @@ class BinaryMLP:
         self.l1_penalty = l1_penalty # Save to ensure l1 penalyt consistent
 
         # Find best model - Grid search
-        best_model, best_perf = None, np.inf
+        self.torch_model, best_perf = None, np.inf
         for param in self.params:
             # Create and train model
             torch.manual_seed(random_state)
@@ -54,25 +54,28 @@ class BinaryMLP:
             model = self._gen_torch_model_(x_train.size(1), 1, param)
             model = train_mlp(model, x_train, y_train, x_val, y_val, l1_penalty = l1_penalty, **args)
             perf = compute_loss(model, x_dev, y_dev, l1_penalty).item()
+            
+            if check:
+                # Estimate hessian of training loss
+                try:
+                    theta = model.get_last_weights() # Use the parameters of the last layer only
+                    hess = hessian(lambda weight: compute_loss(model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
+                    hess = hess[theta.abs().squeeze() > self.cutting_threshold, :][:, theta.abs().squeeze() > self.cutting_threshold]
+                    torch.inverse(hess)
+                except:
+                    # Ignore maybe next is invertible
+                    continue
+
             if perf < best_perf:
                 best_perf = perf
-                best_model = model
+                self.torch_model = model
+                self.hess = hess if check else None
 
-        # Update model
-        self.torch_model = best_model.eval()
+        if self.torch_model is None:
+            raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
+
         self.fitted = True
         self.calibrated = False
-
-        # Estimate hessian of training loss
-        theta = self.torch_model.get_last_weights() # Use the parameters of the last layer only
-        hess = hessian(lambda weight: compute_loss(self.torch_model.replace_last_weights(weight), self.x, self.y, l1_penalty = l1_penalty), theta, create_graph = True).squeeze()
-        self.hess = hess[theta.abs().squeeze() > self.cutting_threshold, :][:, theta.abs().squeeze() > self.cutting_threshold]
-        
-        if check:
-            try:
-                torch.inverse(self.hess)
-            except:
-                raise ValueError('Architecture leads to singular weights matrix for last layer: Use another architecture or increase l1_penalty.')
 
         # Compute calibration
         if platt_calibration:
@@ -111,7 +114,8 @@ class BinaryMLP:
 
             Returns:
                 np.narray: A 1d array of the influence of each expert
-        """       
+        """ 
+        assert self.hess is not None, "Model hasn't been trained for influence"
         if batch is not None:
             # Batch computation to avoid too large matrix with hess shared
             batched_inf = []
