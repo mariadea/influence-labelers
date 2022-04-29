@@ -3,7 +3,7 @@
 # Parse command and additional parameters
 import argparse
 parser = argparse.ArgumentParser(description = 'Running k experiments of amalgamation.')
-parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).', choices = ['child', 'mimic', 'mimic_1', 'mimic_2', 'mimic_3', 'mimic_4'])
+parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).', choices = ['child', 'mimic', 'mimic_1', 'mimic_2', 'mimic_3', 'mimic_4', 'mimic_5', 'mimic_6'])
 parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
 parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
@@ -13,7 +13,7 @@ args = parser.parse_args()
 
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
-params = {'layers': [[10], []] if args.log else [[node] * layer for node in [10, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
+params = {'layers': [[]] if args.log else [[node] * layer for node in [10, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
 l1_penalties = [0.001, 0.01, 0.1, 1., 10., 100., 1000., 10000.]
 
 rho = 0.05 # Control which point to consider from a confience point of view
