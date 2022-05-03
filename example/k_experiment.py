@@ -3,9 +3,10 @@
 # Parse command and additional parameters
 import argparse
 parser = argparse.ArgumentParser(description = 'Running k experiments of amalgamation.')
-parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).', choices = ['child', 'mimic', 'mimic_1', 'mimic_2', 'mimic_3', 'mimic_4', 'mimic_5', 'mimic_6'])
+parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).')
 parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
+parser.add_argument('-args.rho', default = 0.05, type = float, help = 'Control which point to consider from a confience point of view.')
 parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
 parser.add_argument('-p2', default = 0.95, type = float, help = 'Threshold on opposing.')
 parser.add_argument('-p3', default = 0.002, type = float, help = 'Threshold on flat influence. Default: ignore.')
@@ -15,8 +16,6 @@ print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
 params = {'layers': [[]] if args.log else [[node] * layer for node in [10, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
 l1_penalties = [0.001, 0.01, 0.1, 1., 10., 100., 1000., 10000.]
-
-rho = 0.05 # Control which point to consider from a confience point of view
 tau = 1.0  # Balance between observed and expert labels
 
 # Open dataset and update
@@ -29,7 +28,7 @@ if args.dataset == 'mimic':
     data_set = "../data/triage_clean.csv" 
     triage = pd.read_csv(data_set, index_col = [0, 1])
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
-    covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
+    covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
     selective = False
 
@@ -37,7 +36,7 @@ elif '_' in args.dataset:
     data_set = "../data/triage_scenario_{}.csv".format(args.dataset[args.dataset.index('_') + 1:]) 
     triage = pd.read_csv(data_set, index_col = [0, 1])
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
-    covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'acuity', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
+    covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
     selective = False
 
@@ -104,9 +103,9 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     
     # Amalgamation
     flat_influence = (np.abs(influence) > args.p3).sum(0) == 0
-    high_conf = (predictions > (1 - rho)) if args.dataset == 'child' else ((predictions > (1 - rho)) | (predictions < rho))
+    high_conf = (predictions > (1 - args.rho)) if args.dataset == 'child' else ((predictions > (1 - args.rho)) | (predictions < args.rho))
     high_agr = (((center_metric > args.p1) & (opposing_metric > args.p2)) | flat_influence) & high_conf
-    high_agr_correct = (((predictions - tar_train['D']).abs() < rho) & high_agr)
+    high_agr_correct = (((predictions - tar_train['D']).abs() < args.rho) & high_agr)
 
     ya = tar_train['Y1'].copy().astype(int)
     ya.loc[high_agr_correct] = (1 - tau) * tar_train.loc[high_agr_correct, 'Y1'].copy() \
@@ -133,9 +132,9 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
     center_metric, opposing_metric = compute_agreeability(influence_test)
     flat_influence_test = (np.abs(influence_test) > args.p3).sum(0) == 0
-    high_conf_test = (predictions_test > (1 - rho)) if args.dataset == 'child' else ((predictions_test > (1 - rho)) | (predictions_test < rho))
+    high_conf_test = (predictions_test > (1 - args.rho)) if args.dataset == 'child' else ((predictions_test > (1 - args.rho)) | (predictions_test < args.rho))
     high_agr_test = (((center_metric > args.p1) & (opposing_metric > args.p2)) | flat_influence_test) & high_conf_test
-    high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < rho) & high_agr_test
+    high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < args.rho) & high_agr_test
 
     # Retrain a model on non almagamation only and calibrate: Rely on observed
     model = BinaryMLP(**params)
@@ -144,4 +143,4 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
 
-    pkl.dump(results, open('../results/{}_{}_p1={}_p2={}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.p1, args.p2, args.p3), 'wb'))
+    pkl.dump(results, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3), 'wb'))
