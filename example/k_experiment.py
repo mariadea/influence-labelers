@@ -6,7 +6,7 @@ parser = argparse.ArgumentParser(description = 'Running k experiments of amalgam
 parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).')
 parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
-parser.add_argument('-args.rho', default = 0.05, type = float, help = 'Control which point to consider from a confience point of view.')
+parser.add_argument('-rho', default = 0.05, type = float, help = 'Control which point to consider from a confience point of view.')
 parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
 parser.add_argument('-p2', default = 0.95, type = float, help = 'Threshold on opposing.')
 parser.add_argument('-p3', default = 0.002, type = float, help = 'Threshold on flat influence. Default: ignore.')
