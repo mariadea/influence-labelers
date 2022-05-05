@@ -4,7 +4,7 @@
 import argparse
 parser = argparse.ArgumentParser(description = 'Running k experiments of amalgamation.')
 parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).')
-parser.add_argument('-k', type = int, default = 20, help = 'Number of iterations to run.')
+parser.add_argument('-k', type = int, default = 10, help = 'Number of iterations to run.')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
 parser.add_argument('-rho', default = 0.05, type = float, help = 'Control which point to consider from a confience point of view.')
 parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
@@ -78,6 +78,8 @@ import sys
 sys.path.append('../')
 
 from model import *
+from model.defer import DeferMLP
+
 results = []
 # Monte Carlo cross validation
 for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
@@ -141,6 +143,11 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups[train][index_observed])
     pred_hyb_test.loc[~high_agr_correct_test] = model.predict(cov_test.loc[~high_agr_correct_test])
 
-    results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test], axis = 1))
+    # Deferal model
+    model = DeferMLP(**params)
+    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed])
+    pred_defer = pd.Series(model.predict(cov_test, tar_test['D']), index = cov_test.index, name = 'Defer')
+
+    results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
 
     pkl.dump(results, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3), 'wb'))
