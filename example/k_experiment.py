@@ -14,7 +14,7 @@ args = parser.parse_args()
 
 print('Script running on {} for {} iterations'.format(args.dataset , args.k))
 
-params = {'layers': [[]] if args.log else [[node] * layer for node in [10, 100] for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
+params = {'layers': [[]] if args.log else [[50] * layer for layer in [1, 2, 3]]}  # If = [] equivalent to a simple logistic regression
 l1_penalties = [0.001, 0.01, 0.1, 1., 10., 100., 1000., 10000.]
 tau = 1.0  # Balance between observed and expert labels
 
