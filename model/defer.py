@@ -138,7 +138,7 @@ class DeferMultiLayerPerceptron_Torch(nn.Module):
 def compute_defer_loss(model, x, y, h):
     output, deferal = model(x)
     output, deferal = output.view(-1), deferal.view(-1)
-    output = deferal * output + (1 - deferal) * h
+    output = deferal * h + (1 - deferal) * output
     return nn.BCELoss()(output, y) 
 
 def train_defer(model,
