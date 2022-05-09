@@ -5,6 +5,7 @@ import argparse
 parser = argparse.ArgumentParser(description = 'Running k experiments of amalgamation.')
 parser.add_argument('--dataset', '-d', type = str, default = 'mimic', help = 'Dataset to analyze (child, mimic or mimic_synth).')
 parser.add_argument('-k', type = int, default = 10, help = 'Number of iterations to run.')
+parser.add_argument('-s', action='store_true', help = 'Selective labels')
 parser.add_argument('--log', '-l', action='store_true', help = 'Run a logistic regression model (otherwise neural network).')
 parser.add_argument('-rho', default = 0.05, type = float, help = 'Control which point to consider from a confience point of view.')
 parser.add_argument('-p1', default = 6, type = float, help = 'Threshold on center mass.')
@@ -30,7 +31,7 @@ if args.dataset == 'mimic':
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
-    selective = False
+    selective = args.s
 
 elif '_' in args.dataset:
     data_set = "../data/triage_scenario_{}.csv".format(args.dataset[args.dataset.index('_') + 1:]) 
