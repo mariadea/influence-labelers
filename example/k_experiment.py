@@ -68,6 +68,7 @@ elif args.dataset == 'child':
     Y_obs = Y_obs.reshape((Y_obs.shape[0],))
 
     target = pd.DataFrame({'D': D, 'Y1': Y_obs, 'Y2': Y_serv, 'Y3': Y_sub})
+    target['Union'] = target.Y1 | target.Y2 | target.Y3
     experts = pd.Series(screener_ids)
     covariates = pd.DataFrame(X[:, :-1]) # Remove 0 columns
     splitter = GroupShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42)
@@ -146,9 +147,17 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Deferal model
     model = DeferMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed])
+    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed], groups = None if groups is None else groups[train][index_observed])
     pred_defer = pd.Series(model.predict(cov_test, tar_test['D']), index = cov_test.index, name = 'Defer')
 
-    results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
+    # Union model
+    if 'Union' in tar_train.colmuns:
+        model = BinaryMLP(**params)
+        model = model.fit(cov_train[index_observed], tar_train['Union'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
+        pred_u_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Union')
+
+        results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer, pred_u_test], axis = 1))
+    else:
+        results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
 
     pkl.dump(results, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3, '_selective' if selective else ''), 'wb'))
