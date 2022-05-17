@@ -92,14 +92,15 @@ def center_mass(influence_point):
     center = np.dot(inf_sorted, np.arange(len(influence_point))) / total if total > 0 else 1.
     return center
 
-def opposing(influence_point):
+def opposing(influence_point, prediction):
     inf_pos = influence_point[np.where(influence_point > 0)]
     inf_neg = influence_point[np.where(influence_point < 0)]
 
     total = inf_pos.sum() - inf_neg.sum() # Sum of absolute values
-    return np.max([inf_pos.sum(), - inf_neg.sum()]) / total if total > 0 else 1.
+    if total == 0: return 1
+    return (inf_pos.sum() if prediction > 0.5 else - inf_neg.sum()) / total 
 
-def compute_agreeability(influence):
+def compute_agreeability(influence, predictions):
     """
         Compute agreeability of the influence matrix
 
@@ -110,5 +111,5 @@ def compute_agreeability(influence):
             (cm, op): Arrays of center of mass and opposing metrics
     """
     cm_inf = np.apply_along_axis(center_mass, 0, influence) # Compute over the different points
-    op_inf = np.apply_along_axis(opposing, 0, influence)
+    op_inf = np.array([opposing(influence[:, i], p) for i, p in enumerate(predictions)])
     return cm_inf, op_inf

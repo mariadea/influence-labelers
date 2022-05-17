@@ -39,7 +39,7 @@ elif '_' in args.dataset:
     splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_state = 42), None
     covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
-    selective = False
+    selective = args.s
 
 elif args.dataset == 'child':
     with open('../../data/ChildWelfare/X_preprocess.pkl', 'rb') as handle:
@@ -103,7 +103,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     except:
         print('Iteration {} - Not invertible hessian'.format(k))
         continue
-    center_metric, opposing_metric = compute_agreeability(influence)
+    center_metric, opposing_metric = compute_agreeability(influence, predictions)
     
     # Amalgamation
     flat_influence = (np.abs(influence) > args.p3).sum(0) == 0
@@ -134,7 +134,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Compute which test points are part of A for test set
     predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
-    center_metric, opposing_metric = compute_agreeability(influence_test)
+    center_metric, opposing_metric = compute_agreeability(influence_test, predictions_test)
     flat_influence_test = (np.abs(influence_test) > args.p3).sum(0) == 0
     high_conf_test = (predictions_test > (1 - args.rho)) if args.dataset == 'child' else ((predictions_test > (1 - args.rho)) | (predictions_test < args.rho))
     high_agr_test = (((center_metric > args.p1) & (opposing_metric > args.p2)) | flat_influence_test) & high_conf_test
@@ -150,14 +150,6 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed], groups = None if groups is None else groups[train][index_observed])
     pred_defer = pd.Series(model.predict(cov_test, tar_test['D']), index = cov_test.index, name = 'Defer')
 
-    # Union model
-    if 'Union' in tar_train.colmuns:
-        model = BinaryMLP(**params)
-        model = model.fit(cov_train[index_observed], tar_train['Union'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
-        pred_u_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Union')
-
-        results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer, pred_u_test], axis = 1))
-    else:
-        results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
+    results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
 
     pkl.dump(results, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3, '_selective' if selective else ''), 'wb'))
