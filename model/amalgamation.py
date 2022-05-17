@@ -20,7 +20,7 @@ def compute_influence(model, grad_p, x_h, y_h, hessian_train, l1_penalty = 0.001
     # Inverse hessian and multiply
     hess_grad = solve(hessian_train, grad_h) #TODO: Approximate instead as in https://github.com/nimarb/pytorch_influence_functions
 
-    return torch.matmul(grad_p, hess_grad)
+    return - torch.matmul(grad_p, hess_grad)
 
 def influence_estimate(model, x, y, h, x_apply, l1_penalties = [0], params = {}, groups = None):
     """
