@@ -83,6 +83,7 @@ from model import *
 from model.defer import DeferMLP
 
 results = []
+amalgamation = []
 # Monte Carlo cross validation
 for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     print("Running iteration {} / {}".format(k + 1, args.k))
@@ -151,5 +152,6 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     pred_defer = pd.Series(model.predict(cov_test, tar_test['D']), index = cov_test.index, name = 'Defer')
 
     results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
+    amalgamation.append(index_amalg.sum())
 
-    pkl.dump(results, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3, '_selective' if selective else ''), 'wb'))
+    pkl.dump({'results': results, 'amalgamation': amalgamation}, open('../results/{}_{}_rho={}_p1={}_p2={}_p3={}{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.rho, args.p1, args.p2, args.p3, '_selective' if selective else ''), 'wb'))
