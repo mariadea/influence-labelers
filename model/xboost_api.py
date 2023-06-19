@@ -40,7 +40,7 @@ class BinaryXGB(BinaryMLP):
         for param in self.params:
             # Create and train model
             np.random.seed(random_state)
-            model = xgb.XGBClassifier(random_state = random_state, **param)
+            model = xgb.XGBClassifier(random_state = random_state, use_label_encoder = False, **param)
             model = model.fit(x_train, y_train, **args)
             perf = -model.score(x_dev, y_dev) # Best score is 1 (values csan go negative) 
             
@@ -84,3 +84,6 @@ class BinaryXGB(BinaryMLP):
 
     def influence(self, x, batch = 1000):
         raise NameError('Computing influence with xgboost is not implemented')
+    
+    def _preprocess_(self, x):
+        return x.values if (isinstance(x, pd.DataFrame) or isinstance(x, pd.Series)) else x
