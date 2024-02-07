@@ -3,19 +3,17 @@ This repository implements the methodology proposed in [Leveraging Expert Consis
 
 ## How to use ?
 ```python
-from nsc import NeuralSurvivalClustering
+# Create model for f_D to model human decision
+f_D = BinaryMLP(**params)
+f_D = f_D.fit(X_train, D_train, a_train)
 
-# Create model for f_h
-f_h = BinaryMLP(**params)
-f_h = f_h.fit(X_train, D_train, a_train)
-
-# Estimate influence on training set
+# Estimate influence on training set 
 folds, predictions, influence = influence_cv(BinaryMLP, X_train, D_train, a_train, params = params, l1_penalties = [0.001, 0.01, 0.1, 1])
 
-# Compute metrics
+# Compute metrics to estimate consistency among experts
 center_metric, opposing_metric = compute_agreeability(influence, predictions)
 
-# Amalgamate
+# Amalgamate observed decision and outcomes
 high_conf = (predictions > (1 - delta)) | (predictions < delta)
 
 flat_influence = (np.abs(influence) > gamma_3).sum(0) == 0
@@ -26,7 +24,7 @@ A = Y.copy()
 A[high_agr_correct] = D_train[high_agr_correct]
 index_amalg = (D == 1) | high_agr_correct # Selective labels
 
-# Train f_A
+# Train a model for the amalgameted outcomes
 f_A = BinaryMLP(**params)
 f_A = f_A.fit(X_train[index_amalg], A[index_amalg], a[index_amalg])
 ```
