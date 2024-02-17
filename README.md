@@ -5,10 +5,10 @@ This repository implements the methodology proposed in [Leveraging Expert Consis
 ```python
 # Create model for f_D to model human decision
 f_D = BinaryMLP(**params)
-f_D = f_D.fit(X_train, D_train, a_train)
+f_D = f_D.fit(X_train, D_train, H_train)
 
 # Estimate influence on training set 
-folds, predictions, influence = influence_cv(BinaryMLP, X_train, D_train, a_train, params = params, l1_penalties = [0.001, 0.01, 0.1, 1])
+folds, predictions, influence = influence_cv(BinaryMLP, X_train, D_train, H_train, params = params, l1_penalties = [0.001, 0.01, 0.1, 1])
 
 # Compute metrics to estimate consistency among experts
 center_metric, opposing_metric = compute_agreeability(influence, predictions)
@@ -26,7 +26,7 @@ index_amalg = (D == 1) | high_agr_correct # Selective labels
 
 # Train a model for the amalgameted outcomes
 f_A = BinaryMLP(**params)
-f_A = f_A.fit(X_train[index_amalg], A[index_amalg], a[index_amalg])
+f_A = f_A.fit(X_train[index_amalg], A[index_amalg], H[index_amalg])
 ```
 
 A full example on the MIMIC dataset is described in `example/Triage - MIMIC.ipynb` and a tutorial described how to choose the hyperparameter in `exampl/Tutorial.ipynb`
