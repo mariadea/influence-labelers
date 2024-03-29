@@ -105,9 +105,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     pred_Y_test = pd.Series(f_Y.predict(cov_test), index = cov_test.index)
     pred_Y_test.to_csv(path_fold + 'f_Y.csv')
 
-
-
-    # Baselines
+    # Alternatives
     # Hybrid model: initialize rely on humans
     pred_hyb_test = pred_D_test.copy()
 
@@ -125,6 +123,31 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     pred_hyb_test.loc[~high_agr_correct_test] = f_hyb.predict(cov_test.loc[~high_agr_correct_test])
     pred_hyb_test.to_csv(path_fold + 'f_hyb.csv')
 
+    # Ensemble consensus
+    ## Estimate decisions
+    decisions = ensemble_agreement_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params)
+
+    ## Estimate consistency
+    predictions = (decisions > 0.5).mean(0) # Take the average of the binarized decisions 
+    high_conf = (predictions > (1 - args.delta)) | (predictions < args.delta)
+    high_agr_correct = ((predictions - tar_train['D']).abs() < args.delta) & high_conf
+
+    ya_ens = tar_train['Y1'].astype(int)
+    ya_ens.loc[high_agr_correct] = (1 - tau) * tar_train['Y1'][high_agr_correct] \
+                                                + tau * tar_train['D'][high_agr_correct]
+    index_amalg = ((tar_train['D'] == 1) | high_agr_correct) if selective else tar_train['D'].isin([0, 1])
+
+    ## Train model on new labels
+    f_Aens = BinaryMLP(**params)
+    f_Aens = f_Aens.fit(cov_train[index_amalg], ya_ens[index_amalg], nur_train[index_amalg], groups = None if groups is None else groups[train][index_amalg])
+    pd.Series(f_Aens.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_Aens.csv')
+    indicator = pd.Series(False, index = cov_train.index)
+    indicator.loc[high_agr_correct] = True
+    pd.concat([ya_ens.rename('Label'), indicator.rename('Indicator')], axis = 1).to_csv(path_fold + 'amalgamation_ensemble.csv')
+
+
+
+    # Baselines
     # Deferal model
     f_def = DeferMLP(**params)
     f_def = f_def.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed], groups = None if groups is None else groups[train][index_observed])
