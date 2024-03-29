@@ -58,5 +58,5 @@ git clone git@github.com:XX/influence-labelers.git
 ```
 
 ## Requirements
-The model relies on  `pytorch`, `pandas`, `numpy` and `sklearn`.  
+The model and baselines rely on `cleanlab`, `pytorch`, `pandas`, `numpy`, `sklearn`, `tqdm` and `xgboost`.  
 To analyze the results `matplotlib` is necessary.
