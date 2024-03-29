@@ -1,5 +1,5 @@
 # Leveraging Expert Consistency
-This repository implements the methodology proposed in [Leveraging Expert Consistency to Improve Algorithmic Decision Support](). The proposed approach leverages influence to estimate the consistency of multiple experts. This information is then leveraged to learn from experts when there is inferred expert consistency, and from observed labels otherwise.
+This repository implements the methodology proposed in [Leveraging Expert Consistency to Improve Algorithmic Decision Support](https://arxiv.org/pdf/2101.09648.pdf). The proposed approach leverages influence to estimate the consistency of multiple experts. This information is then leveraged to learn from experts when there is inferred expert consistency, and from observed labels otherwise.
 
 ## How to use ?
 ```python
