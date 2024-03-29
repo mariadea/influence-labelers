@@ -23,7 +23,7 @@ tau = 1.0  # Balance between observed and expert labels
 import pandas as pd
 import pickle as pkl
 import numpy as np
-from sklearn.model_selection import GroupShuffleSplit, ShuffleSplit
+from sklearn.model_selection import ShuffleSplit
 
 data_set = "../data/triage_scenario_{}.csv".format(args.dataset[args.dataset.index('_') + 1:]) 
 triage = pd.read_csv(data_set, index_col = [0, 1])
@@ -31,6 +31,11 @@ splitter, groups = ShuffleSplit(n_splits = args.k, train_size = .75, random_stat
 covariates, target, experts = triage.drop(columns = ['D', 'Y1', 'Y2', 'YC', 'nurse']), triage[['D', 'Y1', 'Y2', 'YC']], triage['nurse']
 
 selective = args.s
+
+# Create results folder
+import os
+path_results = '../results/{}_{}_delta={}_gamma1={}_gamma2={}_gamma3={}{}/'.format(args.dataset, 'log' if args.log else 'mlp', args.delta, args.gamma1, args.gamma2, args.gamma3, '_selective' if selective else '')
+os.makedirs(path_results, exist_ok = True)
 
 # Iterate k times the algorithm
 import sys
@@ -43,6 +48,14 @@ results = []
 amalgamation = []
 # Monte Carlo cross validation
 for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
+    # Create folder for iteration
+    path_fold = path_results + 'fold_{}/'.format(k)
+    try:
+        os.makedirs(path_fold)
+    except:
+        # Skip fold if folder already exists
+        continue
+
     print("Running iteration {} / {}".format(k + 1, args.k))
 
     # Split data
@@ -51,11 +64,13 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
             experts.iloc[train], experts.iloc[test]
 
     # Train on decision
-    model = BinaryMLP(**params)
-    model = model.fit(cov_train, tar_train['D'], nur_train, platt_calibration = True, groups = None if groups is None else groups[train])
-    pred_h_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Human')
+    f_D = BinaryMLP(**params)
+    f_D = f_D.fit(cov_train, tar_train['D'], nur_train, platt_calibration = True, groups = None if groups is None else groups[train])
+    pred_D_test = pd.Series(f_D.predict(cov_test), index = cov_test.index)
+    pred_D_test.to_csv(path_fold + 'f_D.csv')
 
-    # Fold evaluation of influences
+    # Proposed Approach
+    ## Fold evaluation of influences
     try:
         folds, predictions, influence = influence_cv(BinaryMLP, cov_train, tar_train['D'], nur_train, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
     except:
@@ -63,7 +78,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
         continue
     center_metric, opposing_metric = compute_agreeability(influence, predictions)
     
-    # Amalgamation
+    ## Amalgamation
     flat_influence = (np.abs(influence) > args.gamma3).sum(0) == 0
     high_conf = (predictions > (1 - args.delta)) if args.dataset == 'child' else ((predictions > (1 - args.delta)) | (predictions < args.delta))
     high_agr = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence) & high_conf
@@ -75,22 +90,28 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     index_amalg = ((tar_train['D'] == 1) | high_agr_correct) if selective else tar_train['D'].isin([0, 1])
 
-
-    # Amalgamation model
-    model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_amalg], ya[index_amalg], nur_train[index_amalg], groups = None if groups is None else groups[train][index_amalg])
-    pred_amalg_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Amalgamation')
+    ## Train model on new labels
+    f_A = BinaryMLP(**params)
+    f_A = f_A.fit(cov_train[index_amalg], ya[index_amalg], nur_train[index_amalg], groups = None if groups is None else groups[train][index_amalg])
+    pd.Series(f_A.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_A.csv')
+    indicator = pd.Series(False, index = cov_train.index)
+    indicator.loc[high_agr_correct] = True
+    pd.concat([ya.rename('Label'), indicator.rename('Indicator')], axis = 1).to_csv(path_fold + 'amalgamation.csv')
 
     # Observed outcome
     index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
-    model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
-    pred_obs_test = pd.Series(model.predict(cov_test), index = cov_test.index, name = 'Observed')
+    f_Y = BinaryMLP(**params)
+    f_Y = f_Y.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
+    pred_Y_test = pd.Series(f_Y.predict(cov_test), index = cov_test.index)
+    pred_Y_test.to_csv(path_fold + 'f_Y.csv')
 
+
+
+    # Baselines
     # Hybrid model: initialize rely on humans
-    pred_hyb_test = pred_h_test.copy().rename('Hybrid')
+    pred_hyb_test = pred_D_test.copy()
 
-    # Compute which test points are part of A for test set
+    ## Compute which test points are part of A for test set
     predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
     center_metric, opposing_metric = compute_agreeability(influence_test, predictions_test)
     flat_influence_test = (np.abs(influence_test) > args.gamma3).sum(0) == 0
@@ -98,17 +119,35 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence_test) & high_conf_test
     high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < args.delta) & high_agr_test
 
-    # Retrain a model on non almagamation only and calibrate: Rely on observed
-    model = BinaryMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups[train][index_observed])
-    pred_hyb_test.loc[~high_agr_correct_test] = model.predict(cov_test.loc[~high_agr_correct_test])
+    ## Retrain a model on non almagamation only and calibrate: Rely on observed
+    f_hyb = BinaryMLP(**params)
+    f_hyb = f_hyb.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups[train][index_observed])
+    pred_hyb_test.loc[~high_agr_correct_test] = f_hyb.predict(cov_test.loc[~high_agr_correct_test])
+    pred_hyb_test.to_csv(path_fold + 'f_hyb.csv')
 
     # Deferal model
-    model = DeferMLP(**params)
-    model = model.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed], groups = None if groups is None else groups[train][index_observed])
-    pred_defer = pd.Series(model.predict(cov_test, tar_test['D']), index = cov_test.index, name = 'Defer')
+    f_def = DeferMLP(**params)
+    f_def = f_def.fit(cov_train[index_observed], tar_train['Y1'][index_observed], tar_train['D'][index_observed], groups = None if groups is None else groups[train][index_observed])
+    pd.Series(f_def.predict(cov_test, tar_test['D']), index = cov_test.index).to_csv(path_fold + 'f_def.csv')
 
-    results.append(pd.concat([pred_obs_test, pred_amalg_test, pred_h_test, pred_hyb_test, pred_defer], axis = 1))
-    amalgamation.append([high_agr_correct.mean()])
+    # Average predictions
+    ((pred_Y_test + pred_D_test) / 2).to_csv(path_fold + 'f_ensemble.csv')
 
-    pkl.dump({'results': results, 'amalgamation': amalgamation}, open('../results/{}_{}_delta={}_gamma1={}_gamma2={}_gamma3={}{}.pkl'.format(args.dataset, 'log' if args.log else 'mlp', args.delta, args.gamma1, args.gamma2, args.gamma3, '_selective' if selective else ''), 'wb'))
+    # Weak supervision
+    weak_labels = (tar_train['D'] + tar_train['Y1']).fillna(tar_train['D']) / 2
+    f_weak = BinaryMLP(**params)
+    f_weak = f_weak.fit(cov_train, weak_labels, nur_train)
+    pd.Series(f_weak.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_weak.csv')
+
+    # Noisy labels learning
+    ## Clean labels
+    import cleanlab
+    from sklearn.neural_network import MLPClassifier
+    f_robust = cleanlab.classification.CleanLearning(MLPClassifier(50))
+    label_issues = f_robust.find_label_issues(cov_train, tar_train['D'].astype(int))
+    selection = ~label_issues.is_label_issue.values
+
+    ## Train on subset
+    f_robust = BinaryMLP(**params)
+    f_robust.fit(cov_train.iloc[selection], tar_train['D'].iloc[selection], nur_train)
+    pd.Series(f_robust.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_robust.csv')
