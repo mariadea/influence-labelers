@@ -113,3 +113,34 @@ def compute_agreeability(influence, predictions):
     cm_inf = np.apply_along_axis(center_mass, 0, influence) # Compute over the different points
     op_inf = np.array([opposing(influence[:, i], p) for i, p in enumerate(predictions)])
     return cm_inf, op_inf
+
+
+def ensemble_agreement_cv(model, x, y, h, params = {}, groups = None, n_split = 3):
+    """
+    Compute a stratified cross validation to estimate the influence of each points
+    A model is fitted on each experts and then the average decision is estimated
+
+    Args:
+        model (Object): Create a model (need to have predict and influence functions)
+        x (np.array pd.DataFrame): Covariates
+        y (np.array pd.DataFrame): Associated outcome
+        h (np.array pd.DataFrame): Associated expert
+        params (Dict): Dictionary to initialize the model with
+        fit_params (Dict): Dictionary for training
+        n_split (int): Number of fold used for the stratified computation of influence
+
+    Returns:
+        decisions: Decisions predictions for each experts (dim num experts * len(x))
+    """
+    x, y, h = (x.values, y.values, h.values) if isinstance(x, pd.DataFrame) else (x, y, h)
+
+    splitter = StratifiedKFold(n_split, shuffle = True, random_state = 42) if groups is None else StratifiedGroupKFold(n_split, shuffle = True, random_state = 42)
+    decisions = np.zeros((len(np.unique(h)), len(x)))
+    for (train_index, test_index) in splitter.split(x, h, groups):
+        for expert in np.unique(h):
+            model_expert = model(**params)
+            selection = h[train_index] == expert
+            model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
+            decisions[expert, test_index] = model_expert.predict(x[test_index])
+
+    return decisions
