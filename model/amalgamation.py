@@ -143,6 +143,6 @@ def ensemble_agreement_cv(model, x, y, h, params = {}, groups = None, n_split = 
             try:
                 model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
             except:
-                model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
+                model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = False)
             decisions[i, test_index] = model_expert.predict(x[test_index])
     return decisions
