@@ -110,7 +110,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     # Alternatives
     # Hybrid model: initialize rely on humans
     if not os.path.exists(path_fold + 'f_hyb.csv'):
-        pred_hyb_test = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1])
+        pred_hyb_test = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1]).iloc[:, 0]
 
         ## Compute which test points are part of A for test set
         predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
@@ -164,8 +164,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
 
     # Average predictions
     if not os.path.exists(path_fold + 'f_ensemble.csv'):
-        pred_D_test = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1])
-        pred_Y_test = pd.read_csv(path_fold + 'f_Y.csv', index_col = [0, 1])
+        pred_D_test = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1]).iloc[:, 0]
+        pred_Y_test = pd.read_csv(path_fold + 'f_Y.csv', index_col = [0, 1]).iloc[:, 0]
         ((pred_Y_test + pred_D_test) / 2).to_csv(path_fold + 'f_ensemble.csv')
 
     # Weak supervision
