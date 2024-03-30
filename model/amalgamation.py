@@ -137,10 +137,10 @@ def ensemble_agreement_cv(model, x, y, h, params = {}, groups = None, n_split = 
     splitter = StratifiedKFold(n_split, shuffle = True, random_state = 42) if groups is None else StratifiedGroupKFold(n_split, shuffle = True, random_state = 42)
     decisions = np.zeros((len(np.unique(h)), len(x)))
     for (train_index, test_index) in splitter.split(x, h, groups):
-        for expert in np.unique(h):
+        for i, expert in enumerate(np.unique(h)):
             model_expert = model(**params)
             selection = h[train_index] == expert
             model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
-            decisions[expert, test_index] = model_expert.predict(x[test_index])
+            decisions[i, test_index] = model_expert.predict(x[test_index])
 
     return decisions
