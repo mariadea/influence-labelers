@@ -140,9 +140,9 @@ def ensemble_agreement_cv(model, x, y, h, params = {}, groups = None, n_split = 
         for i, expert in enumerate(np.unique(h)):
             model_expert = model(**params)
             selection = h[train_index] == expert
-            if np.abs(y[train_index][selection].mean() - 0.5) != 0.5: # Only fit if not deterministic
+            try:
                 model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
-                decisions[i, test_index] = model_expert.predict(x[test_index])
-            else:
-                decisions[i, test_index] = y[train_index][selection].mean()
+            except:
+                model_expert.fit(x[train_index][selection], y[train_index][selection], h[train_index][selection], platt_calibration = True)
+            decisions[i, test_index] = model_expert.predict(x[test_index])
     return decisions
