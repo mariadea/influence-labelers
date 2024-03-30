@@ -97,7 +97,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
             print('Iteration {} - Not invertible hessian'.format(k))
 
     # Observed outcome
-    if os.path.exists(path_fold + 'f_Y.csv'):
+    if not os.path.exists(path_fold + 'f_Y.csv'):
         index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
         f_Y = BinaryMLP(**params)
         f_Y = f_Y.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], groups = None if groups is None else groups[train][index_observed])
