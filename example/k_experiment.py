@@ -76,7 +76,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
             
             ## Amalgamation
             flat_influence = (np.abs(influence) > args.gamma3).sum(0) == 0
-            high_conf = (predictions > (1 - args.delta))
+            high_conf = (predictions > (1 - args.delta)) | (predictions < args.delta)
             high_agr = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence) & high_conf
             high_agr_correct = (((predictions - tar_train['D']).abs() < args.delta) & high_agr)
 
@@ -115,8 +115,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
         predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
         center_metric, opposing_metric = compute_agreeability(influence_test, predictions_test)
         flat_influence_test = (np.abs(influence_test) > args.gamma3).sum(0) == 0
-        high_conf_test = (predictions_test > (1 - args.delta))
-        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence_test) & high_conf_test
+        high_conf = (predictions > (1 - args.delta)) | (predictions < args.delta)
+        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence_test) & high_conf
         high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < args.delta) & high_agr_test
 
         index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
