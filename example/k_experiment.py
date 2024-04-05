@@ -92,7 +92,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
             pd.Series(f_A.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_A.csv')
             indicator = pd.Series(False, index = cov_train.index)
             indicator.loc[index_amalg] = True
-            pd.concat([ya.rename('Label'), high_conf.rename('Conf'), high_agr.rename('Agree'), high_agr_correct.rename('Agreement'), indicator.rename('Indicator')]).to_csv(path_fold + 'amalgamation.csv')
+            pd.concat({'Label': ya, 'Conf': high_conf, 'Agree': high_agr, 'Agreement': high_agr_correct, 'Indicator': indicator}, axis = 1).to_csv(path_fold + 'amalgamation.csv')
         except:
             print('Iteration {} - Not invertible hessian'.format(k))
 
@@ -147,8 +147,8 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
         f_Aens = f_Aens.fit(cov_train[index_amalg], ya_ens[index_amalg], nur_train[index_amalg], groups = None if groups is None else groups[train][index_amalg])
         pd.Series(f_Aens.predict(cov_test), index = cov_test.index).to_csv(path_fold + 'f_Aens.csv')
         indicator = pd.Series(False, index = cov_train.index)
-        indicator.loc[high_agr_correct] = True
-        pd.concat([ya_ens.rename('Label'), high_conf.rename('Conf'), high_agr_correct.rename('Agreement'), indicator.rename('Indicator')], axis = 1).to_csv(path_fold + 'amalgamation_ensemble.csv')
+        indicator.loc[index_amalg] = True
+        pd.concat({'Label': ya_ens, 'Conf': high_conf, 'Agreement': high_agr_correct, 'Indicator': indicator}, axis = 1).to_csv(path_fold + 'amalgamation_ensemble.csv')
 
 
 
