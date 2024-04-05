@@ -109,23 +109,23 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
     # Alternatives
     # Hybrid model: initialize rely on humans
     if not os.path.exists(path_fold + 'f_hyb.csv'):
-        pred_hyb_test = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1]).iloc[:, 0]
+        pred_hyb = pd.read_csv(path_fold + 'f_D.csv', index_col = [0, 1]).iloc[:, 0]
 
         ## Compute which test points are part of A for test set
-        predictions_test, influence_test = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
-        center_metric, opposing_metric = compute_agreeability(influence_test, predictions_test)
-        flat_influence_test = (np.abs(influence_test) > args.gamma3).sum(0) == 0
+        predictions, influence = influence_estimate(BinaryMLP, cov_train, tar_train['D'], nur_train, cov_test, params = params, l1_penalties = l1_penalties, groups = None if groups is None else groups[train])
+        center_metric, opposing_metric = compute_agreeability(influence, predictions)
+        flat_influence = (np.abs(influence) > args.gamma3).sum(0) == 0
         high_conf = (predictions > (1 - args.delta)) | (predictions < args.delta)
-        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence_test) & high_conf
-        high_agr_correct_test = ((predictions_test - tar_test['D']).abs() < args.delta) & high_agr_test
+        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | influence) & high_conf
+        high_agr_correct = ((predictions - tar_test['D']).abs() < args.delta) & high_agr_test
 
         index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
 
         ## Retrain a model on non almagamation only and calibrate: Rely on observed
         f_hyb = BinaryMLP(**params)
         f_hyb = f_hyb.fit(cov_train[index_observed], tar_train['Y1'][index_observed], nur_train[index_observed], platt_calibration = True, groups = None if groups is None else groups[train][index_observed])
-        pred_hyb_test.loc[~high_agr_correct_test] = f_hyb.predict(cov_test.loc[~high_agr_correct_test])
-        pred_hyb_test.to_csv(path_fold + 'f_hyb.csv')
+        pred_hyb.loc[~high_agr_correct] = f_hyb.predict(cov_test.loc[~high_agr_correct])
+        pred_hyb.to_csv(path_fold + 'f_hyb.csv')
 
     # Ensemble consensus
     if not os.path.exists(path_fold + 'f_Aens.csv'):
