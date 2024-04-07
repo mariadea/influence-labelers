@@ -116,7 +116,7 @@ for k, (train, test) in enumerate(splitter.split(covariates, target, groups)):
         center_metric, opposing_metric = compute_agreeability(influence, predictions)
         flat_influence = (np.abs(influence) > args.gamma3).sum(0) == 0
         high_conf = (predictions > (1 - args.delta)) | (predictions < args.delta)
-        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | influence) & high_conf
+        high_agr_test = (((center_metric > args.gamma1) & (opposing_metric > args.gamma2)) | flat_influence) & high_conf
         high_agr_correct = ((predictions - tar_test['D']).abs() < args.delta) & high_agr_test
 
         index_observed = tar_train['D'] == 1 if selective else tar_train['D'].isin([0, 1])
