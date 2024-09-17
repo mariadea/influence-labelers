@@ -55,7 +55,7 @@ This folder contains the neural network model, influence function and amalgamati
 - `neural_api.py` is the object to create a neural network, relying on the model described in `neural_torch.py`, trained using the loss in `loss.py`.
 - `xgboost_api.py` similarly allows to use a xgboost approach for our model.
 
-Finally `defer.py` is an implementation of the learn to defer appraoch discussed in the paper.
+Finally `defer.py` is an implementation of a learn to defer appraoch that defers to humans when there is estimated expert consistency.
 
 ### example/
 This folder contains the scripts used to run the experiment and analyze the results. Execute `run_all.sh` to reproduce all MIMIC experiments, then analyse them using `Analysis - MIMIC.ipynb`
